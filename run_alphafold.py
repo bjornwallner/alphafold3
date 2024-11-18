@@ -227,7 +227,7 @@ _nseeds = flags.DEFINE_integer(
 )
 _nstruct = flags.DEFINE_integer(
     'nstruct',
-    None,
+    1,
     'Number of seeds to run',
 )
 
@@ -362,6 +362,7 @@ class ResultsForSeed:
   """
 
   seed: int
+  model_no: int
   inference_results: Sequence[base_model.InferenceResult]
   full_fold_input: folding_input.Input
 
@@ -371,7 +372,7 @@ def predict_structure(
     model_runner: ModelRunner,
     buckets: Sequence[int] | None = None,
     output_dir=None,
-    nstruct=None,
+    nstruct=1,
 ) -> Sequence[ResultsForSeed]:
   """Runs the full inference pipeline to predict structures for each seed."""
 
@@ -389,43 +390,45 @@ def predict_structure(
   all_inference_results = []
   
   #print(featurised_examples[0].keys())
-  for seed, example in zip(fold_input.rng_seeds, featurised_examples):
-
-    print(f'Running model inference for seed {seed}...')
-    inference_start_time = time.time()
-    rng_key = jax.random.PRNGKey(seed)
-    result = model_runner.run_inference(example, rng_key)
-    print(
-        f'Running model inference for seed {seed} took '
-        f' {time.time() - inference_start_time:.2f} seconds.'
-    )
-    print(f'Extracting output structures (one per sample) for seed {seed}...')
-    extract_structures = time.time()
-    inference_results = model_runner.extract_structures(
-        batch=example, result=result, target_name=fold_input.name
-    )
-    print(
-        f'Extracting output structures (one per sample) for seed {seed} took '
-        f' {time.time() - extract_structures:.2f} seconds.'
-    )
-    all_inference_results.append(
-        ResultsForSeed(
-            seed=seed,
-            inference_results=inference_results,
-            full_fold_input=fold_input,
-        )
-    )
-    if output_dir is not None:
-      print('Writing results sofar... ')
-      write_outputs(
-          all_inference_results=[all_inference_results[-1]],
-          output_dir=output_dir,
-          job_name=fold_input.sanitised_name(),
+  for input_seed, example in zip(fold_input.rng_seeds, featurised_examples):
+    for i in range(nstruct):
+      seed=input_seed+i
+      print(f'Running model inference for seed {seed} and model_no {i}...')
+      inference_start_time = time.time()
+      rng_key = jax.random.PRNGKey(seed)
+      result = model_runner.run_inference(example, rng_key)
+      print(
+          f'Running model inference for seed {seed} took '
+          f' {time.time() - inference_start_time:.2f} seconds.'
       )
-    print(
-        'Running model inference and extracting output structures for seed'
-        f' {seed} took  {time.time() - inference_start_time:.2f} seconds.'
-    )
+      print(f'Extracting output structures (one per sample) for seed {seed}...')
+      extract_structures = time.time()
+      inference_results = model_runner.extract_structures(
+          batch=example, result=result, target_name=fold_input.name
+      )
+      print(
+          f'Extracting output structures (one per sample) for seed {seed} took '
+          f' {time.time() - extract_structures:.2f} seconds.'
+      )
+      all_inference_results.append(
+          ResultsForSeed(
+              seed=seed,
+              model_no=i,
+              inference_results=inference_results,
+              full_fold_input=fold_input,
+          )
+      )
+      if output_dir is not None:
+        print(f'Writing results for seed {seed} model_no {model_no}... ')
+        write_outputs(
+            all_inference_results=[all_inference_results[-1]],
+            output_dir=output_dir,
+            job_name=fold_input.sanitised_name(),
+        )
+      print(
+          'Running model inference and extracting output structures for seed'
+          f' {seed} took  {time.time() - inference_start_time:.2f} seconds.'
+      )
   print(
       'Running model inference and extracting output structures for seeds'
       f' {fold_input.rng_seeds} took '
@@ -462,15 +465,16 @@ def write_outputs(
 
   os.makedirs(output_dir, exist_ok=True)
   for results_for_seed in all_inference_results:
-    seed = results_for_seed.seed
+    seed=results_for_seed.seed
+    model_no=results_for_seed.model_no
     for sample_idx, result in enumerate(results_for_seed.inference_results):
-      sample_dir = os.path.join(output_dir, f'seed-{seed}_sample-{sample_idx}')
+      sample_dir = os.path.join(output_dir, f'seed-{seed}_sample-{sample_idx}_{model_no}')
       os.makedirs(sample_dir, exist_ok=True)
       post_processing.write_output(
           inference_result=result, output_dir=sample_dir
       )
       ranking_score = float(result.metadata['ranking_score'])
-      ranking_scores.append((seed, sample_idx, ranking_score))
+      ranking_scores.append((seed, sample_idx, model_no,ranking_score))
       if max_ranking_score is None or ranking_score > max_ranking_score:
         max_ranking_score = ranking_score
         max_ranking_result = result
@@ -487,7 +491,7 @@ def write_outputs(
     # comparison of ranking scores across different runs.
     with open(os.path.join(output_dir, 'ranking_scores.csv'), 'wt') as f:
       writer = csv.writer(f)
-      writer.writerow(['seed', 'sample', 'ranking_score'])
+      writer.writerow(['seed', 'sample', 'model_no','ranking_score'])
       writer.writerows(ranking_scores)
 
 
@@ -535,6 +539,7 @@ def process_fold_input(
     model_runner: ModelRunner | None,
     output_dir: os.PathLike[str] | str,
     buckets: Sequence[int] | None = None,
+    nstruct=1
 ) -> folding_input.Input | Sequence[ResultsForSeed]:
   """Runs data pipeline and/or inference on a single fold input.
 
@@ -589,6 +594,7 @@ def process_fold_input(
         model_runner=model_runner,
         buckets=buckets,
         output_dir=output_dir,
+        nstruct=nstruct
     )
     print(
         f'Writing outputs for {fold_input.name} for seed(s)'
@@ -714,6 +720,7 @@ def main(_):
         model_runner=model_runner,
         output_dir=os.path.join(_OUTPUT_DIR.value, fold_input.sanitised_name()),
         buckets=tuple(int(bucket) for bucket in _BUCKETS.value),
+        nstruct=_nstruct.value
     )
 
   print(f'Done processing {len(fold_inputs)} fold inputs.')
