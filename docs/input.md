@@ -494,15 +494,15 @@ glycan to the protein residue, and all bonds that are within the glycan between
 its individual chemical components.
 
 For example, to define the following glycan composed of 4 components (CMP1,
-CMP2, CMP3, CMP4) bound to an arginine in a protein chain A:
+CMP2, CMP3, CMP4) bound to an asparagine in a protein chain A:
 
 ```
  ⋮
-ALA              CMP4
- |                |
-ARG --- CMP1 --- CMP2
- |                |
-ALA              CMP3
+ALA            CMP4
+ |              |
+ASN ―― CMP1 ―― CMP2
+ |              |
+ALA            CMP3
  ⋮
 ```
 
@@ -510,7 +510,7 @@ You will need to specify:
 
 1.  Protein chain A.
 2.  Ligand chain B with the 4 components.
-3.  Bonds ARG-CMP1, CMP1-CMP2, CMP2-CMP3, CMP2-CMP4.
+3.  Bonds ASN-CMP1, CMP1-CMP2, CMP2-CMP3, CMP2-CMP4.
 
 ## User-provided CCD
 

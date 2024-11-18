@@ -34,7 +34,7 @@ import sys
 import textwrap
 import time
 import typing
-from typing import Final, Protocol, Self, TypeVar, overload
+from typing import Protocol, Self, TypeVar, overload
 
 
 
@@ -62,9 +62,15 @@ import numpy as np
 
 print(folding_input.__file__)
 
+<<<<<<< HEAD
 #_HOME_DIR = pathlib.Path(os.environ.get('HOME'))
 #DEFAULT_MODEL_DIR = _HOME_DIR / 'models/model_103275239_1'
 #DEFAULT_DB_DIR = _HOME_DIR / 'public_databases'
+=======
+_HOME_DIR = pathlib.Path(os.environ.get('HOME'))
+DEFAULT_MODEL_DIR = _HOME_DIR / 'models'
+DEFAULT_DB_DIR = _HOME_DIR / 'public_databases'
+>>>>>>> 08ee672e6361599dc46dd756c64b6b3c4f85a57e
 
 DEFAULT_DB_DIR=pathlib.Path('/proj/wallner-b/share/alphafold3_data/')
 DEFAULT_MODEL_DIR=pathlib.Path(f'{DEFAULT_DB_DIR}/params')
@@ -146,11 +152,13 @@ _HMMBUILD_BINARY_PATH = flags.DEFINE_string(
 )
 
 # Database paths.
-_DB_DIR = flags.DEFINE_string(
+_DB_DIR = flags.DEFINE_multi_string(
     'db_dir',
-    DEFAULT_DB_DIR.as_posix(),
-    'Path to the directory containing the databases.',
+    (DEFAULT_DB_DIR.as_posix(),),
+    'Path to the directory containing the databases. Can be specified multiple'
+    ' times to search multiple directories in order.',
 )
+
 _SMALL_BFD_DATABASE_PATH = flags.DEFINE_string(
     'small_bfd_database_path',
     '${DB_DIR}/bfd-first_non_consensus_sequences.fasta',
@@ -189,7 +197,7 @@ _RNA_CENTRAL_DATABASE_PATH = flags.DEFINE_string(
 )
 _PDB_DATABASE_PATH = flags.DEFINE_string(
     'pdb_database_path',
-    '${DB_DIR}/pdb_2022_09_28_mmcif_files.tar',
+    '${DB_DIR}/mmcif_files',
     'PDB database directory with mmCIF files path, used for template search.',
 )
 _SEQRES_DATABASE_PATH = flags.DEFINE_string(
@@ -212,7 +220,7 @@ _NHMMER_N_CPU = flags.DEFINE_integer(
     ' beyond 8 CPUs provides very little additional speedup.',
 )
 
-# Compilation cache
+# Compilation cache.
 _JAX_COMPILATION_CACHE_DIR = flags.DEFINE_string(
     'jax_compilation_cache_dir',
     None,
@@ -229,20 +237,16 @@ _nstruct = flags.DEFINE_integer(
     'Number of seeds to run',
 )
 
-_BUCKETS: Final[tuple[int, ...]] = (
-    256,
-    512,
-    768,
-    1024,
-    1280,
-    1536,
-    2048,
-    2560,
-    3072,
-    3584,
-    4096,
-    4608,
-    5120,
+# Compilation buckets.
+_BUCKETS = flags.DEFINE_list(
+    'buckets',
+    # pyformat: disable
+    ['256', '512', '768', '1024', '1280', '1536', '2048', '2560', '3072',
+     '3584', '4096', '4608', '5120'],
+    # pyformat: enable
+    'Strictly increasing order of token sizes for which to cache compilations.'
+    ' For any input with more tokens than the largest bucket size, a new bucket'
+    ' is created for exactly that number of tokens.',
 )
 
 
@@ -515,6 +519,22 @@ def process_fold_input(
   ...
 
 
+def replace_db_dir(path_with_db_dir: str, db_dirs: Sequence[str]) -> str:
+  """Replaces the DB_DIR placeholder in a path with the given DB_DIR."""
+  template = string.Template(path_with_db_dir)
+  if 'DB_DIR' in template.get_identifiers():
+    for db_dir in db_dirs:
+      path = template.substitute(DB_DIR=db_dir)
+      if os.path.exists(path):
+        return path
+    raise FileNotFoundError(
+        f'{path_with_db_dir} with ${{DB_DIR}} not found in any of {db_dirs}.'
+    )
+  if not os.path.exists(path_with_db_dir):
+    raise FileNotFoundError(f'{path_with_db_dir} does not exist.')
+  return path_with_db_dir
+
+
 def process_fold_input(
     fold_input: folding_input.Input,
     data_pipeline_config: pipeline.DataPipelineConfig | None,
@@ -644,28 +664,24 @@ def main(_):
   print('\n'.join(notice))
 
   if _RUN_DATA_PIPELINE.value:
-    replace_db_dir = lambda x: string.Template(x).substitute(
-        DB_DIR=_DB_DIR.value
-    )
+    expand_path = lambda x: replace_db_dir(x, _DB_DIR.value)
     data_pipeline_config = pipeline.DataPipelineConfig(
         jackhmmer_binary_path=_JACKHMMER_BINARY_PATH.value,
         nhmmer_binary_path=_NHMMER_BINARY_PATH.value,
         hmmalign_binary_path=_HMMALIGN_BINARY_PATH.value,
         hmmsearch_binary_path=_HMMSEARCH_BINARY_PATH.value,
         hmmbuild_binary_path=_HMMBUILD_BINARY_PATH.value,
-        small_bfd_database_path=replace_db_dir(_SMALL_BFD_DATABASE_PATH.value),
-        mgnify_database_path=replace_db_dir(_MGNIFY_DATABASE_PATH.value),
-        uniprot_cluster_annot_database_path=replace_db_dir(
+        small_bfd_database_path=expand_path(_SMALL_BFD_DATABASE_PATH.value),
+        mgnify_database_path=expand_path(_MGNIFY_DATABASE_PATH.value),
+        uniprot_cluster_annot_database_path=expand_path(
             _UNIPROT_CLUSTER_ANNOT_DATABASE_PATH.value
         ),
-        uniref90_database_path=replace_db_dir(_UNIREF90_DATABASE_PATH.value),
-        ntrna_database_path=replace_db_dir(_NTRNA_DATABASE_PATH.value),
-        rfam_database_path=replace_db_dir(_RFAM_DATABASE_PATH.value),
-        rna_central_database_path=replace_db_dir(
-            _RNA_CENTRAL_DATABASE_PATH.value
-        ),
-        pdb_database_path=replace_db_dir(_PDB_DATABASE_PATH.value),
-        seqres_database_path=replace_db_dir(_SEQRES_DATABASE_PATH.value),
+        uniref90_database_path=expand_path(_UNIREF90_DATABASE_PATH.value),
+        ntrna_database_path=expand_path(_NTRNA_DATABASE_PATH.value),
+        rfam_database_path=expand_path(_RFAM_DATABASE_PATH.value),
+        rna_central_database_path=expand_path(_RNA_CENTRAL_DATABASE_PATH.value),
+        pdb_database_path=expand_path(_PDB_DATABASE_PATH.value),
+        seqres_database_path=expand_path(_SEQRES_DATABASE_PATH.value),
         jackhmmer_n_cpu=_JACKHMMER_N_CPU.value,
         nhmmer_n_cpu=_NHMMER_N_CPU.value,
     )
@@ -703,7 +719,7 @@ def main(_):
         data_pipeline_config=data_pipeline_config,
         model_runner=model_runner,
         output_dir=os.path.join(_OUTPUT_DIR.value, fold_input.sanitised_name()),
-        buckets=_BUCKETS,
+        buckets=tuple(int(bucket) for bucket in _BUCKETS.value),
     )
 
   print(f'Done processing {len(fold_inputs)} fold inputs.')

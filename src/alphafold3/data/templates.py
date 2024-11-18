@@ -696,6 +696,7 @@ def _parse_hit_metadata(
   try:
     cif = mmcif.from_string(structure_store.get_mmcif_str(pdb_id))
   except structure_stores.NotFoundError:
+    logging.warning('Failed to get mmCIF for %s.', pdb_id)
     return None, None, None
   release_date = mmcif.get_release_date(cif)
 
@@ -851,10 +852,11 @@ def package_template_features(
 
 def _resolve_path(path: os.PathLike[str] | str) -> str:
   """Resolves path for data dep paths, stringifies otherwise."""
-  try:
-    # Data dependency paths: db baked into the binary.
-    return resources.filename(path)
-  except (FileNotFoundError, ValueError):
+  # Data dependency paths: db baked into the binary.
+  resolved_path = resources.filename(path)
+  if os.path.exists(resolved_path):
+    return resolved_path
+  else:
     # Other paths, e.g. local.
     return str(path)
 
