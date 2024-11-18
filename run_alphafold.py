@@ -62,15 +62,9 @@ import numpy as np
 
 print(folding_input.__file__)
 
-<<<<<<< HEAD
 #_HOME_DIR = pathlib.Path(os.environ.get('HOME'))
 #DEFAULT_MODEL_DIR = _HOME_DIR / 'models/model_103275239_1'
 #DEFAULT_DB_DIR = _HOME_DIR / 'public_databases'
-=======
-_HOME_DIR = pathlib.Path(os.environ.get('HOME'))
-DEFAULT_MODEL_DIR = _HOME_DIR / 'models'
-DEFAULT_DB_DIR = _HOME_DIR / 'public_databases'
->>>>>>> 08ee672e6361599dc46dd756c64b6b3c4f85a57e
 
 DEFAULT_DB_DIR=pathlib.Path('/proj/wallner-b/share/alphafold3_data/')
 DEFAULT_MODEL_DIR=pathlib.Path(f'{DEFAULT_DB_DIR}/params')
