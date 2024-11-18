@@ -419,7 +419,7 @@ def predict_structure(
           )
       )
       if output_dir is not None:
-        print(f'Writing results for seed {seed} model_no {model_no}... ')
+        print(f'Writing results for seed {seed} model_no {i}... ')
         write_outputs(
             all_inference_results=[all_inference_results[-1]],
             output_dir=output_dir,
