@@ -43,6 +43,10 @@ WORKDIR /app/alphafold
 # Install the Python dependencies AlphaFold 3 needs.
 RUN pip3 install -r dev-requirements.txt
 RUN pip3 install --no-deps .
+
+#Fixes problem with missing: GLIBCXX_3.4.29
+#mamba install -c conda-forge libstdcxx-ng=11.2.0
+
 # Build chemical components database (this binary was installed by pip).
 RUN build_data
 

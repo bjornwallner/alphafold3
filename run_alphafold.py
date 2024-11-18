@@ -23,15 +23,21 @@ from collections.abc import Callable, Iterable, Sequence
 import csv
 import dataclasses
 import functools
+import json
 import multiprocessing
 import os
 import pathlib
 import shutil
 import string
+import io
+import sys
 import textwrap
 import time
 import typing
 from typing import Final, Protocol, Self, TypeVar, overload
+
+
+
 
 from absl import app
 from absl import flags
@@ -54,11 +60,14 @@ import jax
 from jax import numpy as jnp
 import numpy as np
 
+print(folding_input.__file__)
 
-_HOME_DIR = pathlib.Path(os.environ.get('HOME'))
-DEFAULT_MODEL_DIR = _HOME_DIR / 'models/model_103275239_1'
-DEFAULT_DB_DIR = _HOME_DIR / 'public_databases'
+#_HOME_DIR = pathlib.Path(os.environ.get('HOME'))
+#DEFAULT_MODEL_DIR = _HOME_DIR / 'models/model_103275239_1'
+#DEFAULT_DB_DIR = _HOME_DIR / 'public_databases'
 
+DEFAULT_DB_DIR=pathlib.Path('/proj/wallner-b/share/alphafold3_data/')
+DEFAULT_MODEL_DIR=pathlib.Path(f'{DEFAULT_DB_DIR}/params')
 
 # Input and output paths.
 _JSON_PATH = flags.DEFINE_string(
@@ -209,6 +218,16 @@ _JAX_COMPILATION_CACHE_DIR = flags.DEFINE_string(
     None,
     'Path to a directory for the JAX compilation cache.',
 )
+_nseeds = flags.DEFINE_integer(
+    'nseeds',
+    None,
+    'Number of seeds to run',
+)
+_nstruct = flags.DEFINE_integer(
+    'nstruct',
+    None,
+    'Number of seeds to run',
+)
 
 _BUCKETS: Final[tuple[int, ...]] = (
     256,
@@ -353,6 +372,8 @@ def predict_structure(
     fold_input: folding_input.Input,
     model_runner: ModelRunner,
     buckets: Sequence[int] | None = None,
+    output_dir=None,
+    nstruct=None,
 ) -> Sequence[ResultsForSeed]:
   """Runs the full inference pipeline to predict structures for each seed."""
 
@@ -368,7 +389,10 @@ def predict_structure(
   )
   all_inference_start_time = time.time()
   all_inference_results = []
+  
+  #print(featurised_examples[0].keys())
   for seed, example in zip(fold_input.rng_seeds, featurised_examples):
+
     print(f'Running model inference for seed {seed}...')
     inference_start_time = time.time()
     rng_key = jax.random.PRNGKey(seed)
@@ -393,6 +417,13 @@ def predict_structure(
             full_fold_input=fold_input,
         )
     )
+    if output_dir is not None:
+      print('Writing results sofar... ')
+      write_outputs(
+          all_inference_results=[all_inference_results[-1]],
+          output_dir=output_dir,
+          job_name=fold_input.sanitised_name(),
+      )
     print(
         'Running model inference and extracting output structures for seed'
         f' {seed} took  {time.time() - inference_start_time:.2f} seconds.'
@@ -543,6 +574,7 @@ def process_fold_input(
         fold_input=fold_input,
         model_runner=model_runner,
         buckets=buckets,
+        output_dir=output_dir,
     )
     print(
         f'Writing outputs for {fold_input.name} for seed(s)'
@@ -578,11 +610,13 @@ def main(_):
 
   if _INPUT_DIR.value is not None:
     fold_inputs = folding_input.load_fold_inputs_from_dir(
-        pathlib.Path(_INPUT_DIR.value)
+        pathlib.Path(_INPUT_DIR.value),nstruct=_nseeds.value
     )
   elif _JSON_PATH.value is not None:
+
+    #nstruct fix
     fold_inputs = folding_input.load_fold_inputs_from_path(
-        pathlib.Path(_JSON_PATH.value)
+          pathlib.Path(_JSON_PATH.value),nstruct=_nseeds.value
     )
   else:
     raise AssertionError(
@@ -659,6 +693,10 @@ def main(_):
     model_runner = None
 
   print(f'Processing {len(fold_inputs)} fold inputs.')
+  print(f'Number of seeds: {_nseeds.value}')
+  print(f'Number of nstructs: {_nstruct.value}')
+  print(fold_inputs[0].rng_seeds)
+  #print(fold_input[0]['modelSeeds'])
   for fold_input in fold_inputs:
     process_fold_input(
         fold_input=fold_input,

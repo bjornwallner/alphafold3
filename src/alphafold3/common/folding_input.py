@@ -1013,11 +1013,10 @@ def check_unique_sanitised_names(fold_inputs: Sequence[Input]) -> None:
     )
 
 
-def load_fold_inputs_from_path(json_path: pathlib.Path) -> Sequence[Input]:
+def load_fold_inputs_from_path(json_path: pathlib.Path,nstruct=None) -> Sequence[Input]:
   """Loads multiple fold inputs from a JSON string."""
   with open(json_path, 'r') as f:
     json_str = f.read()
-
   # Parse the JSON string, so we can detect its format.
   raw_json = json.loads(json_str)
 
@@ -1042,11 +1041,17 @@ def load_fold_inputs_from_path(json_path: pathlib.Path) -> Sequence[Input]:
         ) from e
   else:
     logging.info(
-        'Detected %s is an AlphaFold 3 JSON since the top-level is not a list.',
-        json_path,
-    )
+      'Detected %s is an AlphaFold 3 JSON since the top-level is not a list.3',
+      json_path,
+      )
     # AlphaFold 3 JSON.
-    try:
+    
+    if nstruct is not None:
+      #add nstruct more seeds to the input json
+      json_data=json.loads(json_str)
+      json_data['modelSeeds']=[_sample_rng_seed() for _ in range(nstruct)]
+      json_str=json.dumps(json_data)
+    try:       
       fold_inputs.append(Input.from_json(json_str))
     except ValueError as e:
       raise ValueError(
@@ -1060,7 +1065,7 @@ def load_fold_inputs_from_path(json_path: pathlib.Path) -> Sequence[Input]:
   return fold_inputs
 
 
-def load_fold_inputs_from_dir(input_dir: pathlib.Path) -> Sequence[Input]:
+def load_fold_inputs_from_dir(input_dir: pathlib.Path,nstruct=None) -> Sequence[Input]:
   """Loads multiple fold inputs from all JSON files in a given input_dir.
 
   Args:
@@ -1077,7 +1082,7 @@ def load_fold_inputs_from_dir(input_dir: pathlib.Path) -> Sequence[Input]:
     if not file_path.is_file():
       continue
 
-    fold_inputs.extend(load_fold_inputs_from_path(file_path))
+    fold_inputs.extend(load_fold_inputs_from_path(file_path,nstruct=nstruct))
 
   check_unique_sanitised_names(fold_inputs)
 
